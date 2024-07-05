@@ -10,9 +10,9 @@ void main() async {
   final router = Router();
 
   // JSON 파일 경로 설정
-  final jsonFilePath = p.join(Directory.current.path, 'users.json');
+  final jsonFilePath = p.join(Directory.current.path, './db/users.json');
 
-  // 회원가입 엔드포인트
+  // 회원가입 post 시작
   router.post('/register', (Request request) async {
     // 요청의 본문을 읽어서 JSON 데이터로 디코딩합니다.
     final payload = await request.readAsString();
@@ -46,9 +46,7 @@ void main() async {
 
     if (existingUser != null) {
       // ID가 중복된 경우
-      return Response(101,
-          body: jsonEncode({'message': 'ID가 중복되었습니다.'}),
-          headers: {'Content-Type': 'application/json'});
+      return Response(101); // id 중복 오류
     }
 
     // 새로운 사용자 추가
@@ -60,9 +58,9 @@ void main() async {
     // JSON 파일에 저장
     await file.writeAsString(jsonEncode(users), mode: FileMode.write);
 
-    return Response.ok(jsonEncode(newUser),
-        headers: {'Content-Type': 'application/json'});
+    return Response(200);
   });
+  // 회원가입 post 완료
 
   final handler =
       const Pipeline().addMiddleware(logRequests()).addHandler(router);
