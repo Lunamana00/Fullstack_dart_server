@@ -62,6 +62,41 @@ void main() async {
   });
   // 회원가입 post 완료
 
+  // 로그인 post 시작
+  router.post('/login', (Request request) async {
+    final payload = await request.readAsString();
+    final loginData = jsonDecode(payload);
+
+    File file = File(jsonFilePath);
+    List<dynamic> users = [];
+
+    if (await file.exists()) {
+      try {
+        final contents = await file.readAsString();
+        if (contents.isNotEmpty) {
+          final decoded = jsonDecode(contents);
+          if (decoded is List) {
+            users = decoded;
+          }
+        }
+      } catch (e) {
+        print('Error reading JSON file: $e');
+      }
+    }
+    print(users);
+    final existingUser = users.firstWhere(
+      (user) => user['id'] == loginData['id'] && user['pw'] == loginData['pw'],
+      orElse: () => null,
+    );
+
+    if (existingUser != null) {
+      return Response(200);
+    } else {
+      return Response(201);
+    }
+  });
+  //로그인 post 종료
+
   final handler =
       const Pipeline().addMiddleware(logRequests()).addHandler(router);
 
