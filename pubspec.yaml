@@ -1,0 +1,13 @@
+name: dart_server
+description: A simple RESTful API with Dart
+version: 1.0.0
+
+environment:
+  sdk: '>=2.12.0 <3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.1
+  shelf: ^1.2.0
+  shelf_router: ^1.0.0
