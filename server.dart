@@ -168,6 +168,11 @@ void main() async {
 
     await recordFile.writeAsString(jsonEncode(recordData), mode: FileMode.write);
 
+    Map<String, dynamic> responsePayload = {
+      'comment': comment,
+      'images': images,
+    };
+
     // subject가 ETC가 아닌 경우에만 경험치 업데이트
     if (subject != 'ETC') {
       // 사용자 폴더의 {유저이름}_{subject}.json 파일의 exp와 lv 업데이트
@@ -206,11 +211,39 @@ void main() async {
           userExpData['u_lv'] += 1;
         }
         await userExpFile.writeAsString(jsonEncode(userExpData), mode: FileMode.write);
+
+        responsePayload['u_lv'] = userExpData['u_lv'];
+        responsePayload['u_exp'] = userExpData['u_exp'];
       }
     }
 
-    return Response(200);
+    return Response.ok(jsonEncode(responsePayload), headers: {'Content-Type': 'application/json'});
   });
+
+// 특정 날짜의 기록 가져오기
+router.get('/record/<id>/<date>', (Request request, String id, String date) async {
+  final recordFolder = Directory(p.join(Directory.current.path, 'db', 'users', id, date));
+  print(id);
+  if (await recordFolder.exists()) {
+    final records = recordFolder
+        .listSync()
+        .where((file) => file is File && p.extension(file.path) == '.json')
+        .map((file) {
+          final jsonContent = jsonDecode(File(file.path).readAsStringSync());
+          final subject = p.basenameWithoutExtension(file.path);
+          return {
+            'subject': subject,
+            ...jsonContent
+          };
+        })
+        .toList();
+    print(records);
+    return Response.ok(jsonEncode(records), headers: {'Content-Type': 'application/json'});
+  } else {
+    return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
+  }
+});
+
 
   final handler = const Pipeline().addMiddleware(logRequests()).addHandler(router);
 
