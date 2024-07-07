@@ -66,7 +66,7 @@ void main() async {
       'u_lv': 1,
       'u_exp': 0
     };
-    final subjectData = {'lv': 1, 'exp': 0};
+    final subjectData = {'lv': 1, 'exp': 0, 'dates': []};
 
     await userJsonFile.writeAsString(jsonEncode(userInitialData), mode: FileMode.write);
     await AJsonFile.writeAsString(jsonEncode(subjectData), mode: FileMode.write);
@@ -155,25 +155,35 @@ void main() async {
 
     bool isFirstRecordToday = !(await recordFile.exists());
 
-    if (isFirstRecordToday) {
-      if (!(await userFolder.exists())) {
-        await userFolder.create(recursive: true);
-        print('Folder created: ${userFolder.path}');
-      }
+    if (!(await userFolder.exists())) {
+      await userFolder.create(recursive: true);
+      print('Folder created: ${userFolder.path}');
+    }
 
-      // JSON 파일 생성 및 기본 정보 저장
-      final recordData = {
-        'comment': comment,
-        'images': images,
-      };
+    // JSON 파일 생성 및 기본 정보 저장
+    final recordData = {
+      'comment': comment,
+      'images': images,
+    };
 
-      await recordFile.writeAsString(jsonEncode(recordData), mode: FileMode.write);
+    await recordFile.writeAsString(jsonEncode(recordData), mode: FileMode.write);
 
+    // subject가 ETC가 아닌 경우에만 경험치 업데이트
+    if (subject != 'ETC') {
       // 사용자 폴더의 {유저이름}_{subject}.json 파일의 exp와 lv 업데이트
       final subjectExpPath = p.join(Directory.current.path, 'db', 'users', id, '${id}_$subject.json');
       final subjectExpFile = File(subjectExpPath);
+      Map<String, dynamic> subjectExpData;
       if (await subjectExpFile.exists()) {
-        final subjectExpData = jsonDecode(await subjectExpFile.readAsString());
+        subjectExpData = jsonDecode(await subjectExpFile.readAsString());
+        subjectExpData['dates'] = subjectExpData['dates'] ?? [];
+      } else {
+        subjectExpData = {'lv': 1, 'exp': 0, 'dates': []};
+      }
+
+      if (!subjectExpData['dates'].contains(date)) {
+        subjectExpData['dates'].add(date);
+
         if (subjectExpData['exp'] < 90) {
           subjectExpData['exp'] += 10;
         } else {
@@ -188,6 +198,7 @@ void main() async {
       final userExpFile = File(userExpPath);
       if (await userExpFile.exists()) {
         final userExpData = jsonDecode(await userExpFile.readAsString());
+
         if (userExpData['u_exp'] < 90) {
           userExpData['u_exp'] += 10;
         } else {
@@ -196,14 +207,6 @@ void main() async {
         }
         await userExpFile.writeAsString(jsonEncode(userExpData), mode: FileMode.write);
       }
-    } else {
-      // JSON 파일 생성 및 기본 정보 저장
-      final recordData = {
-        'comment': comment,
-        'images': images,
-      };
-
-      await recordFile.writeAsString(jsonEncode(recordData), mode: FileMode.write);
     }
 
     return Response(200);
