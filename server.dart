@@ -16,7 +16,7 @@ void main() async {
 
   // 회원가입 post 시작
   router.post('/register', (Request request) async {
-    // 요청의 본문을 읽어서 JSON 데이터로 디코딩합니다.
+    // 요청의 본문을 읽어서 JSON 데이터로 디코딩
     final payload = await request.readAsString();
     final newUser = jsonDecode(payload);
 
