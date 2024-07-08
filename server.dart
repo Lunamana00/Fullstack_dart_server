@@ -63,10 +63,11 @@ void main() async {
       'name': newUser['name'],
       'id': newUser['id'],
       'char_type': newUser['char_type'],
-      'u_lv': 1,
-      'u_exp': 0
+      'u_lv': 0,
+      'u_exp': 0,
+      'change': 0
     };
-    final subjectData = {'lv': 1, 'exp': 0, 'dates': []};
+    final subjectData = {'lv': 0, 'exp': 0, 'dates': []};
 
     await userJsonFile.writeAsString(jsonEncode(userInitialData), mode: FileMode.write);
     await AJsonFile.writeAsString(jsonEncode(subjectData), mode: FileMode.write);
@@ -179,7 +180,7 @@ void main() async {
         subjectExpData = jsonDecode(await subjectExpFile.readAsString());
         subjectExpData['dates'] = subjectExpData['dates'] ?? [];
       } else {
-        subjectExpData = {'lv': 1, 'exp': 0, 'dates': []};
+        subjectExpData = {'lv': 0, 'exp': 0, 'dates': []};
       }
 
       if (!subjectExpData['dates'].contains(date)) {
@@ -203,11 +204,10 @@ void main() async {
       if (await userExpFile.exists()) {
         final userExpData = jsonDecode(await userExpFile.readAsString());
 
-        if (userExpData['u_exp'] < 90) {
-          userExpData['u_exp'] += 10;
-        } else {
+        userExpData['u_exp'] = (userExpData['u_exp'] ?? 0) + 10;
+        if (userExpData['u_exp'] >= 100) {
           userExpData['u_exp'] = 0;
-          userExpData['u_lv'] += 1;
+          userExpData['u_lv'] = (userExpData['u_lv'] ?? 0) + 1;
         }
         await userExpFile.writeAsString(jsonEncode(userExpData), mode: FileMode.write);
 
@@ -222,7 +222,6 @@ void main() async {
   // 특정 날짜의 기록 가져오기
   router.get('/record/<id>/<date>', (Request request, String id, String date) async {
     final recordFolder = Directory(p.join(Directory.current.path, 'db', 'users', id, date));
-    print(id);
     if (await recordFolder.exists()) {
       final records = recordFolder
           .listSync()
@@ -237,6 +236,46 @@ void main() async {
     } else {
       return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
     }
+  });
+
+  // 랭킹 정보 가져오기
+  router.get('/ranking', (Request request) async {
+    File file = File(jsonFilePath);
+    List<dynamic> users = [];
+
+    if (await file.exists()) {
+      try {
+        final contents = await file.readAsString();
+        if (contents.isNotEmpty) {
+          final decoded = jsonDecode(contents);
+          if (decoded is List) {
+            users = decoded;
+          }
+        }
+      } catch (e) {
+        print('Error reading JSON file: $e');
+        return Response.internalServerError(body: 'Error reading user data');
+      }
+    }
+
+    users.sort((a, b) {
+      int aScore = (a['u_lv'] ?? 0) * 100 + (a['u_exp'] ?? 0);
+      int bScore = (b['u_lv'] ?? 0) * 100 + (b['u_exp'] ?? 0);
+      return bScore.compareTo(aScore); // 내림차순 정렬
+    });
+
+    List<Map<String, dynamic>> rankingData = [];
+    for (int i = 0; i < users.length; i++) {
+      rankingData.add({
+        'rank': i + 1,
+        'name': users[i]['name'],
+        'level': users[i]['u_lv'] ?? 0,
+        'change': users[i]['change'] ?? 0,
+        'categories': ['코딩', '독서', '운동', '음악']
+      });
+    }
+
+    return Response.ok(jsonEncode(rankingData), headers: {'Content-Type': 'application/json'});
   });
 
   final handler = const Pipeline().addMiddleware(logRequests()).addHandler(router);
