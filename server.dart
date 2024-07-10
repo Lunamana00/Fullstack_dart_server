@@ -5,33 +5,38 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:path/path.dart' as p;
 
-void main() async {
-  final router = Router();
+class UserService {
+  final String jsonFilePath;
+  final String userFolderBasePath;
 
-  // JSON 파일 경로 설정
-  final jsonFilePath = p.join(Directory.current.path, './db/users.json');
-  // 유저 폴더 기본 경로 설정
-  final userFolderBasePath = p.join(Directory.current.path, './db/users');
+  UserService(String basePath)
+      : jsonFilePath = p.join(basePath, './db/users.json'),
+        userFolderBasePath = p.join(basePath, './db/users');
 
-  // 회원가입 post 시작
-  router.post('/register', (Request request) async {
+  Future<List<dynamic>> _readUsersFromFile() async {
+    File file = File(jsonFilePath);
+    if (await file.exists()) {
+      final contents = await file.readAsString();
+      if (contents.isNotEmpty) {
+        final decoded = jsonDecode(contents);
+        if (decoded is List) {
+          return decoded;
+        }
+      }
+    }
+    return [];
+  }
+
+  Future<void> _writeUsersToFile(List<dynamic> users) async {
+    File file = File(jsonFilePath);
+    await file.writeAsString(jsonEncode(users), mode: FileMode.write);
+  }
+
+  Future<Response> registerUser(Request request) async {
     final payload = await request.readAsString();
     final newUser = jsonDecode(payload);
 
-    print('Received newUser: $newUser');
-
-    File file = File(jsonFilePath);
-    List<dynamic> users = [];
-
-    if (await file.exists()) {
-        final contents = await file.readAsString();
-        if (contents.isNotEmpty) {
-          final decoded = jsonDecode(contents);
-          if (decoded is List) {
-            users = decoded;
-          }
-        }
-    }
+    List<dynamic> users = await _readUsersFromFile();
 
     final existingUser = users.firstWhere((user) => user['id'] == newUser['id'], orElse: () => null);
 
@@ -40,20 +45,12 @@ void main() async {
     }
 
     users.add(newUser);
-    print('Number of users: ${users.length}');
-    await file.writeAsString(jsonEncode(users), mode: FileMode.write);
+    await _writeUsersToFile(users);
 
     final userFolder = Directory(p.join(userFolderBasePath, newUser['id']));
     if (!(await userFolder.exists())) {
       await userFolder.create(recursive: true);
-      print('User folder created: ${userFolder.path}');
     }
-
-    final userJsonFile = File(p.join(userFolder.path, '${newUser['id']}.json'));
-    final AJsonFile = File(p.join(userFolder.path, '${newUser['id']}_A.json'));
-    final BJsonFile = File(p.join(userFolder.path, '${newUser['id']}_B.json'));
-    final CJsonFile = File(p.join(userFolder.path, '${newUser['id']}_C.json'));
-    final DJsonFile = File(p.join(userFolder.path, '${newUser['id']}_D.json'));
 
     final userInitialData = {
       'name': newUser['name'],
@@ -65,32 +62,31 @@ void main() async {
     };
     final subjectData = {'lv': 0, 'exp': 0, 'dates': []};
 
+    await _writeUserFiles(newUser['id'], userInitialData, subjectData);
+
+    return Response(200);
+  }
+
+  Future<void> _writeUserFiles(String id, Map<String, dynamic> userInitialData, Map<String, dynamic> subjectData) async {
+    final userFolder = Directory(p.join(userFolderBasePath, id));
+    final userJsonFile = File(p.join(userFolder.path, '$id.json'));
+    final AJsonFile = File(p.join(userFolder.path, '${id}_A.json'));
+    final BJsonFile = File(p.join(userFolder.path, '${id}_B.json'));
+    final CJsonFile = File(p.join(userFolder.path, '${id}_C.json'));
+    final DJsonFile = File(p.join(userFolder.path, '${id}_D.json'));
+
     await userJsonFile.writeAsString(jsonEncode(userInitialData), mode: FileMode.write);
     await AJsonFile.writeAsString(jsonEncode(subjectData), mode: FileMode.write);
     await BJsonFile.writeAsString(jsonEncode(subjectData), mode: FileMode.write);
     await CJsonFile.writeAsString(jsonEncode(subjectData), mode: FileMode.write);
     await DJsonFile.writeAsString(jsonEncode(subjectData), mode: FileMode.write);
+  }
 
-    return Response(200);
-  });
-
-  // 로그인 post 시작
-  router.post('/login', (Request request) async {
+  Future<Response> loginUser(Request request) async {
     final payload = await request.readAsString();
     final loginData = jsonDecode(payload);
 
-    File file = File(jsonFilePath);
-    List<dynamic> users = [];
-
-    if (await file.exists()) {
-        final contents = await file.readAsString();
-        if (contents.isNotEmpty) {
-          final decoded = jsonDecode(contents);
-          if (decoded is List) {
-            users = decoded;
-          }
-        }
-     }
+    List<dynamic> users = await _readUsersFromFile();
 
     final existingUser = users.firstWhere(
       (user) => user['id'] == loginData['id'] && user['pw'] == loginData['pw'],
@@ -102,10 +98,9 @@ void main() async {
     } else {
       return Response(201);
     }
-  });
+  }
 
-  // 유저 정보 가져오기
-  router.get('/user_info/<id>', (Request request, String id) async {
+  Future<Response> getUserInfo(Request request, String id) async {
     final userFolder = Directory(p.join(userFolderBasePath, id));
     final userJsonFilePath = p.join(userFolder.path, '$id.json');
     final userJsonFile = File(userJsonFilePath);
@@ -123,15 +118,13 @@ void main() async {
         final JsonData = await response_list[i].readAsString();
         response_data.add(jsonDecode(JsonData));
       }
-      print(response_data);
       return Response.ok(jsonEncode(response_data), headers: {'Content-Type': 'application/json'});
     } else {
       return Response(500, body: 'User data file not found');
     }
-  });
+  }
 
-  // 기록 요청 저장
-  router.post('/upload', (Request request) async {
+  Future<Response> uploadRecord(Request request) async {
     final payload = await request.readAsString();
     final data = jsonDecode(payload);
 
@@ -141,19 +134,15 @@ void main() async {
     final List<String> images = data['images'] != null ? List<String>.from(data['images']) : [];
     final String comment = data['comment'] ?? '';
 
-    final SavePath = p.join(Directory.current.path, 'db', 'users', id, date, '$subject.json');
+    final SavePath = p.join(userFolderBasePath, id, date, '$subject.json');
 
     final userFolder = Directory(p.dirname(SavePath));
     final recordFile = File(SavePath);
 
-    bool isFirstRecordToday = !(await recordFile.exists());
-
     if (!(await userFolder.exists())) {
       await userFolder.create(recursive: true);
-      print('Folder created: ${userFolder.path}');
     }
 
-    // JSON 파일 생성 및 기본 정보 저장
     final recordData = {
       'comment': comment,
       'images': images,
@@ -161,60 +150,61 @@ void main() async {
 
     await recordFile.writeAsString(jsonEncode(recordData), mode: FileMode.write);
 
-    // subject가 ETC가 아닌 경우에만 경험치 업데이트
     Map<String, dynamic> responseData = {};
     if (subject != 'ETC') {
-
-      // 사용자 폴더의 {유저이름}_{subject}.json 파일의 exp와 lv 업데이트
-      final subjectExpPath = p.join(Directory.current.path, 'db', 'users', id, '${id}_$subject.json');
-      final subjectExpFile = File(subjectExpPath);
-      Map<String, dynamic> subjectExpData;
-      if (await subjectExpFile.exists()) {
-        subjectExpData = jsonDecode(await subjectExpFile.readAsString());
-        subjectExpData['dates'] = subjectExpData['dates'] ?? [];
-      } else {
-        subjectExpData = {'lv': 0, 'exp': 0, 'dates': []};
-      }
-
-      if (!subjectExpData['dates'].contains(date)) {
-        subjectExpData['dates'].add(date);
-
-        if (subjectExpData['exp'] < 90) {
-          subjectExpData['exp'] += 10;
-        } else {
-          subjectExpData['exp'] = 0;
-          subjectExpData['lv'] += 1;
-        }
-        await subjectExpFile.writeAsString(jsonEncode(subjectExpData), mode: FileMode.write);
-      }
-
-      responseData['subjectExp'] = subjectExpData['exp'];
-      responseData['subjectLevel'] = subjectExpData['lv'];
-
-      // 사용자 폴더의 {유저이름}.json 파일의 exp와 lv 업데이트
-      final userExpPath = p.join(Directory.current.path, 'db', 'users', id, '$id.json');
-      final userExpFile = File(userExpPath);
-      if (await userExpFile.exists()) {
-        final userExpData = jsonDecode(await userExpFile.readAsString());
-
-        userExpData['u_exp'] = (userExpData['u_exp'] ?? 0) + 10;
-        if (userExpData['u_exp'] >= 100) {
-          userExpData['u_exp'] = 0;
-          userExpData['u_lv'] = (userExpData['u_lv'] ?? 0) + 1;
-        }
-        await userExpFile.writeAsString(jsonEncode(userExpData), mode: FileMode.write);
-
-        responseData['userExp'] = userExpData['u_exp'];
-        responseData['userLevel'] = userExpData['u_lv'];
-      }
+      responseData = await _updateExpAndLevel(id, date, subject);
     }
 
     return Response.ok(jsonEncode(responseData), headers: {'Content-Type': 'application/json'});
-  });
+  }
 
-  // 특정 날짜의 기록 가져오기
-  router.get('/record/<id>/<date>', (Request request, String id, String date) async {
-    final recordFolder = Directory(p.join(Directory.current.path, 'db', 'users', id, date));
+  Future<Map<String, dynamic>> _updateExpAndLevel(String id, String date, String subject) async {
+    final subjectExpPath = p.join(userFolderBasePath, id, '${id}_$subject.json');
+    final subjectExpFile = File(subjectExpPath);
+    Map<String, dynamic> subjectExpData;
+    if (await subjectExpFile.exists()) {
+      subjectExpData = jsonDecode(await subjectExpFile.readAsString());
+      subjectExpData['dates'] = subjectExpData['dates'] ?? [];
+    } else {
+      subjectExpData = {'lv': 0, 'exp': 0, 'dates': []};
+    }
+
+    if (!subjectExpData['dates'].contains(date)) {
+      subjectExpData['dates'].add(date);
+
+      if (subjectExpData['exp'] < 90) {
+        subjectExpData['exp'] += 10;
+      } else {
+        subjectExpData['exp'] = 0;
+        subjectExpData['lv'] += 1;
+      }
+      await subjectExpFile.writeAsString(jsonEncode(subjectExpData), mode: FileMode.write);
+    }
+
+    final userExpPath = p.join(userFolderBasePath, id, '$id.json');
+    final userExpFile = File(userExpPath);
+    Map<String, dynamic> userExpData = {};
+    if (await userExpFile.exists()) {
+      userExpData = jsonDecode(await userExpFile.readAsString());
+
+      userExpData['u_exp'] = (userExpData['u_exp'] ?? 0) + 10;
+      if (userExpData['u_exp'] >= 100) {
+        userExpData['u_exp'] = 0;
+        userExpData['u_lv'] = (userExpData['u_lv'] ?? 0) + 1;
+      }
+      await userExpFile.writeAsString(jsonEncode(userExpData), mode: FileMode.write);
+    }
+
+    return {
+      'subjectExp': subjectExpData['exp'],
+      'subjectLevel': subjectExpData['lv'],
+      'userExp': userExpData['u_exp'],
+      'userLevel': userExpData['u_lv']
+    };
+  }
+
+  Future<Response> getRecord(Request request, String id, String date) async {
+    final recordFolder = Directory(p.join(userFolderBasePath, id, date));
     if (await recordFolder.exists()) {
       final records = recordFolder
           .listSync()
@@ -229,22 +219,10 @@ void main() async {
     } else {
       return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
     }
-  });
+  }
 
-  // 랭킹 정보 가져오기
-  router.get('/ranking', (Request request) async {
-    File file = File(jsonFilePath);
-    List<dynamic> users = [];
-
-    if (await file.exists()) {
-        final contents = await file.readAsString();
-        if (contents.isNotEmpty) {
-          final decoded = jsonDecode(contents);
-          if (decoded is List) {
-            users = decoded;
-          }
-        }
-      }
+  Future<Response> getRanking(Request request) async {
+    List<dynamic> users = await _readUsersFromFile();
 
     users.sort((a, b) {
       int aScore = (a['u_lv'] ?? 0) * 100 + (a['u_exp'] ?? 0);
@@ -264,7 +242,19 @@ void main() async {
     }
 
     return Response.ok(jsonEncode(rankingData), headers: {'Content-Type': 'application/json'});
-  });
+  }
+}
+
+void main() async {
+  final userService = UserService(Directory.current.path);
+  final router = Router();
+
+  router.post('/register', userService.registerUser);
+  router.post('/login', userService.loginUser);
+  router.get('/user_info/<id>', userService.getUserInfo);
+  router.post('/upload', userService.uploadRecord);
+  router.get('/record/<id>/<date>', userService.getRecord);
+  router.get('/ranking', userService.getRanking);
 
   final handler = const Pipeline().addMiddleware(logRequests()).addHandler(router);
 
