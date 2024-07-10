@@ -24,7 +24,6 @@ void main() async {
     List<dynamic> users = [];
 
     if (await file.exists()) {
-      try {
         final contents = await file.readAsString();
         if (contents.isNotEmpty) {
           final decoded = jsonDecode(contents);
@@ -32,9 +31,6 @@ void main() async {
             users = decoded;
           }
         }
-      } catch (e) {
-        print('Error reading JSON file: $e');
-      }
     }
 
     final existingUser = users.firstWhere((user) => user['id'] == newUser['id'], orElse: () => null);
@@ -87,7 +83,6 @@ void main() async {
     List<dynamic> users = [];
 
     if (await file.exists()) {
-      try {
         final contents = await file.readAsString();
         if (contents.isNotEmpty) {
           final decoded = jsonDecode(contents);
@@ -95,10 +90,7 @@ void main() async {
             users = decoded;
           }
         }
-      } catch (e) {
-        print('Error reading JSON file: $e');
-      }
-    }
+     }
 
     final existingUser = users.firstWhere(
       (user) => user['id'] == loginData['id'] && user['pw'] == loginData['pw'],
@@ -172,6 +164,7 @@ void main() async {
     // subject가 ETC가 아닌 경우에만 경험치 업데이트
     Map<String, dynamic> responseData = {};
     if (subject != 'ETC') {
+
       // 사용자 폴더의 {유저이름}_{subject}.json 파일의 exp와 lv 업데이트
       final subjectExpPath = p.join(Directory.current.path, 'db', 'users', id, '${id}_$subject.json');
       final subjectExpFile = File(subjectExpPath);
@@ -244,7 +237,6 @@ void main() async {
     List<dynamic> users = [];
 
     if (await file.exists()) {
-      try {
         final contents = await file.readAsString();
         if (contents.isNotEmpty) {
           final decoded = jsonDecode(contents);
@@ -252,11 +244,7 @@ void main() async {
             users = decoded;
           }
         }
-      } catch (e) {
-        print('Error reading JSON file: $e');
-        return Response.internalServerError(body: 'Error reading user data');
       }
-    }
 
     users.sort((a, b) {
       int aScore = (a['u_lv'] ?? 0) * 100 + (a['u_exp'] ?? 0);
